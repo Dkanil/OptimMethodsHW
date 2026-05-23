@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.interpolate import CubicHermiteSpline
 
 
-# Функция и ее производная
 def f(x):
     return x ** 2 - 3 * x + x * np.log(x)
 
@@ -11,91 +11,119 @@ def df(x):
     return 2 * x - 2 + np.log(x)
 
 
-# --- МЕТОД КВАДРАТИЧНОЙ АППРОКСИМАЦИИ (ЛР 3) ---
-def quadratic_approximation(x1, dx, eps=0.0001, max_iter=10):
-    print("=== Квадратичная аппроксимация ===")
-    history = []
 
-    for i in range(max_iter):
-        x2 = x1 + dx
-        f1, f2 = f(x1), f(x2)
+def plot_approximation(x_range, approx_func, points_x, points_y, title, iter_num):
+    x_vals = np.linspace(0.5, 2.5, 100)
+    plt.figure(figsize=(8, 5))
+    plt.plot(x_vals, f(x_vals), 'k-', linewidth=2, label='Исходная функция f(x)')
+    plt.plot(x_vals, approx_func(x_vals), 'r--', linewidth=2, label='Аппроксимирующая функция')
+    plt.scatter(points_x, points_y, color='blue', s=60, zorder=5, label='Опорные точки')
+    plt.title(f"{title}. Итерация {iter_num}")
+    plt.xlabel("x")
+    plt.ylabel("f(x)")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
-        # Шаг 4 по алгоритму из лекции
-        if f1 > f2:
-            x3 = x1 + 2 * dx
-        else:
-            x3 = x1 - dx
 
-        f3 = f(x3)
+# квадратичная аппроксимация
+def quadratic_approximation(x1, dx, eps, iteration):
+    x2 = x1 + dx
+    f1, f2 = f(x1), f(x2)
 
-        # Шаг 7: Формула вершины параболы
+    if f1 > f2:
+        x3 = x1 + 2 * dx
+    else:
+        x3 = x1 - dx
+    f3 = f(x3)
+
+    while True:
+        iteration += 1
+        points = [(x1, f1), (x2, f2), (x3, f3)]
+        points.sort(key=lambda x: x[1])
+        xmin, fmin = points[0]
+
         num = (x2 ** 2 - x3 ** 2) * f1 + (x3 ** 2 - x1 ** 2) * f2 + (x1 ** 2 - x2 ** 2) * f3
-        den = (x2 - x3) * f1 + (x3 - x1) * f2 + (x1 - x2) * f3
+        den = 2 * ((x2 - x3) * f1 + (x3 - x1) * f2 + (x1 - x2) * f3)
 
-        if den == 0: break
-        x_bar = 0.5 * (num / den)
+        if den == 0:
+            return quadratic_approximation(xmin, dx, eps, iteration)
+
+        x_bar = num / den
         f_bar = f(x_bar)
+        err_f = abs((fmin - f_bar) / f_bar) if f_bar != 0 else 0
+        err_x = abs((xmin - x_bar) / x_bar) if x_bar != 0 else 0
 
-        print(f"Итерация {i + 1}: Точки ({x1:.4f}, {x2:.4f}, {x3:.4f}), x_min = {x_bar:.6f}, f(x_min) = {f_bar:.6f}")
-        history.append(x_bar)
+        print(
+            f"{iteration:<7} | {x1:<8.4f} | {x2:<8.4f} | {x3:<8.4f} | {x_bar:<8.4f} | {f_bar:<10.5f} | {err_f:<10.6f} | {err_x:.6f}")
 
-        # Шаг 8: Критерий останова
-        f_min = min(f1, f2, f3)
-        x_min = [x1, x2, x3][np.argmin([f1, f2, f3])]
+        #  график для ДЗ 1.2
+        if iteration <= 2:
+            coeffs = np.polyfit([x1, x2, x3], [f1, f2, f3], 2)
+            parabola = np.poly1d(coeffs)
+            plot_approximation([0.5, 2.5], parabola, [x1, x2, x3], [f1, f2, f3], "Квадратичная аппроксимация",
+                               iteration)
 
-        if abs((f_min - f_bar) / f_bar) < eps and abs((x_min - x_bar) / x_bar) < eps:
-            break
+        if abs((fmin - f_bar) / f_bar) < eps and abs((xmin - x_bar) / x_bar) < eps:
+            return x_bar, f_bar, iteration
 
-        x1 = x_bar
-        dx = dx / 2  # сужаем шаг
+        new_points = sorted([(x1, f1), (x2, f2), (x3, f3), (x_bar, f_bar)])
 
-    return history
+        if x_bar == new_points[0][0] or x_bar == new_points[3][0]:
+            return quadratic_approximation(x_bar, dx, eps, iteration)
+
+        idx = 1
+        for i in range(len(new_points)):
+            if new_points[i][0] == (x_bar if f_bar < fmin else xmin):
+                idx = i
+        if idx == 0 or idx == 3:
+            return quadratic_approximation(x_bar, dx, eps, iteration)
+        (x1, f1), (x2, f2), (x3, f3) = new_points[idx - 1], new_points[idx], new_points[idx + 1]
 
 
-# --- МЕТОД КУБИЧЕСКОЙ АППРОКСИМАЦИИ (ДЗ 1.1) ---
+# кубическая аппроксимация
 def cubic_approximation(x1, x2, eps=0.0001, max_iter=10):
-    print("\n=== Кубическая аппроксимация ===")
-    history = []
-
-    for i in range(max_iter):
+    for i in range(1, max_iter + 1):
         y1, y2 = f(x1), f(x2)
         y11, y12 = df(x1), df(x2)
 
-        # Формулы строго из PDF (слайд 1)
         z = y11 + y12 - 3 * (y2 - y1) / (x2 - x1)
         w = np.sqrt(z ** 2 - y11 * y12)
 
         mu = (w + z - y11) / (2 * w - y11 + y12)
         x_new = x1 + mu * (x2 - x1)
 
-        print(f"Итерация {i + 1}: Отрезок [{x1:.4f}, {x2:.4f}], x_new = {x_new:.6f}, f(x_new) = {f(x_new):.6f}")
-        history.append(x_new)
+        print(f"{i:<7} | [{x1:.4f}, {x2:.4f}] | {x_new:<8.4f} | {f(x_new):<10.5f}")
 
-        # Проверка остановки
+        #  график для ДЗ 1.2
+        if i <= 2:
+            cubic_poly = CubicHermiteSpline([x1, x2], [y1, y2], [y11, y12])
+            plot_approximation([0.5, 2.5], cubic_poly, [x1, x2], [y1, y2], "Кубическая аппроксимация", i)
+
         if abs(df(x_new)) < eps:
+            print(f"Минимум найден в точке x = {x_new:.6f}")
+            print(f"Значение функции f(x) = {f(x_new):.6f}")
             break
 
-        # Сужение отрезка
         if df(x_new) < 0:
             x1 = x_new
         else:
             x2 = x_new
 
-    return history
 
+if __name__ == '__main__':
+    print("================ КВАДРАТИЧНАЯ АППРОКСИМАЦИЯ (ЛР3) ================")
+    print(
+        f"{'Итер.':<7} | {'x1':<8} | {'x2':<8} | {'x3':<8} | {'x_bar':<8} | {'f(x_bar)':<10} | {'Погр. f':<10} | {'Погр. x'}")
+    print("-" * 90)
 
-# Запуск и графики (ДЗ 1.2)
-hist_quad = quadratic_approximation(x1=1.0, dx=0.5)
-hist_cubic = cubic_approximation(x1=1.0, x2=2.0)
+    res_x, res_f, iters = quadratic_approximation(1.0, 0.5, 0.0001, 0)
+    print(f"Минимум найден в точке x = {res_x:.6f}")
+    print(f"Значение функции f(x) = {res_f:.6f}")
+    print(f"Количество итераций: {iters}\n")
 
-x_plt = np.linspace(0.5, 2.5, 100)
-y_plt = f(x_plt)
-
-plt.figure(figsize=(8, 5))
-plt.plot(x_plt, y_plt, 'k-', label="f(x) = x^2 - 3x + x*ln(x)")
-plt.scatter(hist_quad, f(np.array(hist_quad)), color='red', label='Квадратичная')
-plt.scatter(hist_cubic, f(np.array(hist_cubic)), color='blue', marker='x', s=80, label='Кубическая')
-plt.title("Визуализация аппроксимаций")
-plt.legend()
-plt.grid()
-plt.show()
+    print("================ КУБИЧЕСКАЯ АППРОКСИМАЦИЯ (ДЗ 1.1) ================")
+    print(f"{'Итер.':<7} | {'Отрезок':<20} | {'x_new':<8} | {'f(x_new)':<10}")
+    print("-" * 55)
+    # Запускаем на отрезке [1, 2]
+    cubic_approximation(1.0, 2.0, 0.0001)

@@ -4,12 +4,8 @@ from scipy.optimize import minimize_scalar
 from abc import ABC, abstractmethod
 
 
-# ==============================================================
-# БЛОК ДЗ 2.3: ОБЪЕКТНАЯ МОДЕЛЬ (КЛАССЫ И НАСЛЕДОВАНИЕ)
-# ==============================================================
-
 class OptimizationProblem:
-    """Класс, инкапсулирующий целевую функцию и её градиент (Агрегация)"""
+    """Класс, инкапсулирующий целевую функцию и её градиент"""
 
     def __init__(self, func, grad):
         self.func = func
@@ -26,12 +22,11 @@ class Optimizer(ABC):
 
     @abstractmethod
     def optimize(self, problem: OptimizationProblem, x0):
-        """Абстрактный метод, который должен быть переопределен в наследниках"""
         pass
 
 
 class CoordinateDescent(Optimizer):
-    """Класс метода покоординатного спуска (Наследование)"""
+    """Класс метода покоординатного спуска"""
 
     def optimize(self, problem: OptimizationProblem, x0):
         x = np.array(x0, dtype=float)
@@ -56,7 +51,7 @@ class CoordinateDescent(Optimizer):
 
 
 class GradientDescent(Optimizer):
-    """Класс метода градиентного спуска (Наследование)"""
+    """Класс метода градиентного спуска"""
 
     def __init__(self, learning_rate=0.1, eps=0.0001, max_iter=50):
         super().__init__(eps, max_iter)
@@ -76,7 +71,7 @@ class GradientDescent(Optimizer):
 
 
 class SteepestDescent(Optimizer):
-    """Класс метода наискорейшего спуска (Наследование)"""
+    """Класс метода наискорейшего спуска"""
 
     def optimize(self, problem: OptimizationProblem, x0):
         x = np.array(x0, dtype=float)
@@ -92,10 +87,6 @@ class SteepestDescent(Optimizer):
             self.history.append(x.copy())
         return x
 
-
-# ==============================================================
-# ФУНКЦИИ ВАРИАНТА 1 И МЕТОД НЬЮТОНА (ДЗ 2.2)
-# ==============================================================
 
 def f_var1(X):
     return 2 * X[0] ** 2 + 2 * X[0] * X[1] + 3 * X[1] ** 2 - 10 * X[0] - 10 * X[1] + 15
@@ -121,50 +112,63 @@ def hessian_z(X):
 
 
 def newton_method(x0, eps=0.0001, max_iter=50):
-    print("\n--- Метод Ньютона (ДЗ 2.2) ---")
+    print("Метод Ньютона")
     x = np.array(x0, dtype=float)
-    for i in range(1, max_iter + 1):
+    g = grad_z(x)
+    norm_g = np.linalg.norm(g)
+    f_val = z_func(x)
+    print(
+        f"{'Итер.':<5} | {'dx1':<8} | {'dx2':<8} | {'x':<8} | {'y':<8} | {'f(x,y)':<10} | {'dz/dx':<8} | {'dz/dy':<8} | {'||f_prime||'}")
+    print("-" * 95)
+    print(
+        f"{0:<5} | {'-':<8} | {'-':<8} | {x[0]:<8.4f} | {x[1]:<8.4f} | {f_val:<10.4f} | {g[0]:<8.4f} | {g[1]:<8.4f} | {norm_g:.6f}")
+    for k in range(1, max_iter + 1):
+        H = hessian_z(x)
+        H_inv = np.linalg.inv(H)
+
+        delta_x = -np.dot(H_inv, g)
+        x = x + delta_x
+
         g = grad_z(x)
-        if np.linalg.norm(g) < eps:
-            print(f"Оптимум найден! Итераций: {i}")
+        norm_g = np.linalg.norm(g)
+        f_val = z_func(x)
+
+        print(
+            f"{k:<5} | {delta_x[0]:<8.4f} | {delta_x[1]:<8.4f} | {x[0]:<8.4f} | {x[1]:<8.4f} | {f_val:<10.4f} | {g[0]:<8.4f} | {g[1]:<8.4f} | {norm_g:.6f}")
+        if norm_g < eps:
             break
-        H_inv = np.linalg.inv(hessian_z(x))
-        x = x - np.dot(H_inv, g)
-        print(f"Итерация {i}: x = {x[0]:.4f}, y = {x[1]:.4f}, |grad| = {np.linalg.norm(g):.6f}")
     return x
 
 
-# ==============================================================
-# ЗАПУСК И ВИЗУАЛИЗАЦИЯ
-# ==============================================================
-if __name__ == '__main__':
-    # Создаем объект задачи
+def main():
     problem = OptimizationProblem(f_var1, grad_f_var1)
     x_start = [-2.0, -2.0]
 
-    # Создаем объекты алгоритмов
     optimizers = {
         "Покоординатный спуск": CoordinateDescent(),
         "Градиентный спуск (h=0.1)": GradientDescent(learning_rate=0.1),
         "Наискорейший спуск": SteepestDescent()
     }
 
-    # Подготовка к графикам (ДЗ 2.1)
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-    X1, X2 = np.meshgrid(np.linspace(-3, 4, 100), np.linspace(-3, 4, 100))
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    X1, X2 = np.meshgrid(np.linspace(-3, 4, 150), np.linspace(-3, 4, 150))
     Z = f_var1([X1, X2])
 
-    # Запускаем каждый метод и рисуем график
     for ax, (title, optimizer) in zip(axes, optimizers.items()):
-        # ООП вызов метода optimize
         optimizer.optimize(problem, x_start)
         hist = np.array(optimizer.history)
 
-        # Рисовка
-        ax.contour(X1, X2, Z, levels=30, cmap='viridis')
-        ax.plot(hist[:, 0], hist[:, 1], 'r.-', linewidth=2, markersize=8, label='Траектория')
-        ax.plot(hist[0, 0], hist[0, 1], 'bo', label='Старт (-2, -2)')
-        ax.plot(hist[-1, 0], hist[-1, 1], 'g*', markersize=12, label='Минимум')
+        # Считаем значения функции в каждой точке траектории
+        func_values = [problem.func(pt) for pt in hist]
+        unique_levels = sorted(list(set(np.round(func_values, 4))))
+        # Отрисовка линий уровня
+        contours = ax.contour(X1, X2, Z, levels=unique_levels, cmap='viridis', zorder=1)
+        ax.clabel(contours, inline=True, fontsize=8, fmt='%.1f')
+        # Отрисовка траектории
+        ax.plot(hist[:, 0], hist[:, 1], 'r.-', linewidth=2, markersize=8, label='Траектория', zorder=2)
+        ax.plot(hist[0, 0], hist[0, 1], 'bo', label=f'Старт {x_start}', zorder=3)
+        ax.plot(hist[-1, 0], hist[-1, 1], 'g*', markersize=12, label=f'Минимум {np.round(hist[-1], 2)}', zorder=4)
+
         ax.set_title(title)
         ax.set_xlabel("x1")
         ax.set_ylabel("x2")
@@ -174,7 +178,10 @@ if __name__ == '__main__':
     plt.tight_layout()
     plt.show()
 
-    # Запуск Ньютона (ДЗ 2.2)
     M0 = [-0.5, 5.5]
     optimum = newton_method(M0)
     print(f"Итоговая точка минимума: x = {optimum[0]:.6f}, y = {optimum[1]:.6f}")
+
+
+if __name__ == '__main__':
+    main()

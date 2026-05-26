@@ -114,6 +114,7 @@ def hessian_z(X):
 def newton_method(x0, eps=0.0001, max_iter=50):
     print("Метод Ньютона")
     x = np.array(x0, dtype=float)
+    history = [x.copy()]
     g = grad_z(x)
     norm_g = np.linalg.norm(g)
     f_val = z_func(x)
@@ -128,6 +129,7 @@ def newton_method(x0, eps=0.0001, max_iter=50):
 
         delta_x = -np.dot(H_inv, g)
         x = x + delta_x
+        history.append(x.copy())
 
         g = grad_z(x)
         norm_g = np.linalg.norm(g)
@@ -137,7 +139,7 @@ def newton_method(x0, eps=0.0001, max_iter=50):
             f"{k:<5} | {delta_x[0]:<8.4f} | {delta_x[1]:<8.4f} | {x[0]:<8.4f} | {x[1]:<8.4f} | {f_val:<10.4f} | {g[0]:<8.4f} | {g[1]:<8.4f} | {norm_g:.6f}")
         if norm_g < eps:
             break
-    return x
+    return x, np.array(history)
 
 
 def main():
@@ -179,8 +181,38 @@ def main():
     plt.show()
 
     M0 = [-0.5, 5.5]
-    optimum = newton_method(M0)
+    optimum, history_newton = newton_method(M0)
     print(f"Итоговая точка минимума: x = {optimum[0]:.6f}, y = {optimum[1]:.6f}")
+
+    # --- Секция построения графика для метода Ньютона ---
+    plt.figure(figsize=(7, 6))
+
+    # Строим сетку вокруг траектории
+    x_min, x_max = min(history_newton[:, 0]) - 1.0, max(history_newton[:, 0]) + 1.0
+    y_min, y_max = min(history_newton[:, 1]) - 1.0, max(history_newton[:, 1]) + 1.0
+    X_n, Y_n = np.meshgrid(np.linspace(x_min, x_max, 150), np.linspace(y_min, y_max, 150))
+    Z_n = z_func([X_n, Y_n])
+
+    # Вычисляем уровни функции в точках траектории для отрисовки линий уровня
+    func_values = [z_func(pt) for pt in history_newton]
+    unique_levels = sorted(list(set(np.round(func_values, 4))))
+
+    # Отрисовка линий уровня z(x,y)
+    contours = plt.contour(X_n, Y_n, Z_n, levels=unique_levels, cmap='viridis', zorder=1)
+    plt.clabel(contours, inline=True, fontsize=8, fmt='%.1f')
+
+    # Отрисовка ломаной линии метода Ньютона
+    plt.plot(history_newton[:, 0], history_newton[:, 1], 'r.-', linewidth=2, markersize=8, label='Траектория Ньютона',
+             zorder=2)
+    plt.plot(M0[0], M0[1], 'bo', label=f'Старт {M0}', zorder=3)
+    plt.plot(optimum[0], optimum[1], 'g*', markersize=12, label=f'Минимум {np.round(optimum, 2)}', zorder=4)
+
+    plt.title("Траектория метода Ньютона для функции z(x, y)")
+    plt.xlabel("x")
+    plt.ylabel("y")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 
 
 if __name__ == '__main__':
